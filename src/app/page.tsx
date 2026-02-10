@@ -115,11 +115,38 @@ export default function Home() {
     ? Math.max(1, Math.ceil(data.totalItems / 10))
     : 0;
   const hasResults = data && data.items.length > 0;
+  const pagination =
+    totalPages > 1 ? (
+      <nav
+        className="mt-6 flex items-center justify-center gap-2"
+        aria-label="Pagination"
+      >
+        <button
+          type="button"
+          onClick={() => goToPage(page - 1)}
+          disabled={page <= 1 || loading}
+          className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 disabled:opacity-50 hover:bg-stone-50"
+        >
+          Previous
+        </button>
+        <span className="px-3 text-sm text-stone-600">
+          Page {page} of {totalPages}
+        </span>
+        <button
+          type="button"
+          onClick={() => goToPage(page + 1)}
+          disabled={page >= totalPages || loading}
+          className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 disabled:opacity-50 hover:bg-stone-50"
+        >
+          Next
+        </button>
+      </nav>
+    ) : null;
 
   return (
     <div className="min-h-screen bg-stone-100 text-stone-900">
       <main className="mx-auto max-w-2xl px-4 py-10">
-        <h1 className="mb-8 text-2xl font-semibold tracking-tight">
+        <h1 className="mb-8 text-center text-2xl font-semibold tracking-tight">
           Google Books Search
         </h1>
 
@@ -129,13 +156,13 @@ export default function Home() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search books..."
-            className="flex-1 rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-stone-900 placeholder-stone-500 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+            className="flex-1 rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-black placeholder-stone-500 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
             aria-label="Search query"
           />
           <button
             type="submit"
             disabled={loading}
-            className="rounded-lg bg-amber-600 px-5 py-2.5 font-medium text-white transition-colors hover:bg-amber-700 disabled:opacity-60"
+            className="rounded-lg bg-amber-600 px-5 py-2.5 font-medium text-black transition-colors hover:bg-amber-700 disabled:opacity-60"
           >
             {loading ? "Searching…" : "Search"}
           </button>
@@ -189,6 +216,7 @@ export default function Home() {
 
             {hasResults ? (
               <>
+                {pagination}
                 <ul className="space-y-1" role="list">
                   {data.items.map((item) => (
                     <li
@@ -235,32 +263,7 @@ export default function Home() {
                   ))}
                 </ul>
 
-                {totalPages > 1 && (
-                  <nav
-                    className="mt-6 flex items-center justify-center gap-2"
-                    aria-label="Pagination"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => goToPage(page - 1)}
-                      disabled={page <= 1 || loading}
-                      className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 disabled:opacity-50 hover:bg-stone-50"
-                    >
-                      Previous
-                    </button>
-                    <span className="px-3 text-sm text-stone-600">
-                      Page {page} of {totalPages}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => goToPage(page + 1)}
-                      disabled={page >= totalPages || loading}
-                      className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 disabled:opacity-50 hover:bg-stone-50"
-                    >
-                      Next
-                    </button>
-                  </nav>
-                )}
+                {pagination}
               </>
             ) : (
               <p className="rounded-lg border border-stone-200 bg-white px-4 py-6 text-center text-stone-500">
