@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 
+/** Single book result returned from the search API */
 type SearchItem = {
   id: string;
   label: string;
@@ -11,6 +12,7 @@ type SearchItem = {
   publishedDate: string | null;
 };
 
+/** Search response including items, total count, aggregate stats, and timing */
 type SearchResult = {
   items: SearchItem[];
   totalItems: number;
@@ -22,6 +24,7 @@ type SearchResult = {
 
 const NO_DESCRIPTION = "No description available for this book.";
 
+/** Main page: Google Books search with cached pagination via prefetching */
 export default function Home() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -29,12 +32,14 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  /** Cached paging: holds prefetched next-page data for instant navigation */
   const [prefetched, setPrefetched] = useState<{
     query: string;
     page: number;
     data: SearchResult;
   } | null>(null);
 
+  /** Fetches search results for the given query and page */
   const search = useCallback(
     async (q: string, p: number) => {
       if (!q.trim()) return;
@@ -54,6 +59,7 @@ export default function Home() {
         setData(json);
         setExpandedId(null);
         const totalPages = Math.max(1, Math.ceil((json.totalItems ?? 0) / 10));
+        // Prefetch next page for cached paging (instant navigation when user clicks Next)
         if (p < totalPages) {
           prefetchPage(q.trim(), p + 1);
         }
@@ -67,6 +73,7 @@ export default function Home() {
     []
   );
 
+  /** Prefetches next page data in the background for cached paging */
   const prefetchPage = useCallback(async (q: string, p: number) => {
     try {
       const res = await fetch(
@@ -77,7 +84,7 @@ export default function Home() {
         setPrefetched({ query: q, page: p, data: json });
       }
     } catch {
-      // ignore prefetch errors
+      // Silently ignore prefetch errors; user can still navigate and trigger a fresh fetch
     }
   }, []);
 
@@ -88,6 +95,7 @@ export default function Home() {
     search(query, 1);
   };
 
+  /** Navigates to a page: uses prefetched data if available, otherwise fetches */
   const goToPage = useCallback(
     (nextPage: number) => {
       const q = query.trim();
@@ -111,6 +119,7 @@ export default function Home() {
     [query, prefetched, search, prefetchPage]
   );
 
+  // Google Books API returns 10 results per page
   const totalPages = data
     ? Math.max(1, Math.ceil(data.totalItems / 10))
     : 0;
