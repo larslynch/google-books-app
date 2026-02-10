@@ -23,6 +23,34 @@ type SearchResult = {
 };
 
 const NO_DESCRIPTION = "No description available for this book.";
+const CACHE_NAME = "google-books-search";
+
+/** Client-side cache: fetches search results, returning from Cache API if available */
+async function fetchSearchCached(
+  query: string,
+  page: number
+): Promise<SearchResult> {
+  const url = `/api/search?q=${encodeURIComponent(query)}&page=${page}`;
+  const request = new Request(url);
+
+  if (typeof caches !== "undefined") {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(request);
+    if (cached) {
+      const json = await cached.json();
+      if (json.items) return json as SearchResult;
+    }
+    const res = await fetch(request);
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error ?? "Search failed");
+    cache.put(request, new Response(JSON.stringify(json)));
+    return json as SearchResult;
+  }
+  const res = await fetch(request);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? "Search failed");
+  return json as SearchResult;
+}
 
 /** Main page: Google Books search with cached pagination via prefetching */
 export default function Home() {
@@ -32,36 +60,27 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  /** Cached paging: holds prefetched next-page data for instant navigation */
-  const [prefetched, setPrefetched] = useState<{
-    query: string;
-    page: number;
-    data: SearchResult;
-  } | null>(null);
 
-  /** Fetches search results for the given query and page */
+  /** Clear browser cache for this app when starting a new search */
+  const clearSearchCache = useCallback(async () => {
+    if (typeof caches !== "undefined") {
+      await caches.delete(CACHE_NAME);
+    }
+  }, []);
+
+  /** Fetches search results; uses Cache API for client-side page caching */
   const search = useCallback(
     async (q: string, p: number) => {
       if (!q.trim()) return;
       setLoading(true);
       setError(null);
-      setPrefetched(null);
       try {
-        const res = await fetch(
-          `/api/search?q=${encodeURIComponent(q.trim())}&page=${p}`
-        );
-        const json = await res.json();
-        if (!res.ok) {
-          setError(json.error ?? "Search failed");
-          setData(null);
-          return;
-        }
+        const json = await fetchSearchCached(q.trim(), p);
         setData(json);
         setExpandedId(null);
         const totalPages = Math.max(1, Math.ceil((json.totalItems ?? 0) / 10));
-        // Prefetch next page for cached paging (instant navigation when user clicks Next)
         if (p < totalPages) {
-          prefetchPage(q.trim(), p + 1);
+          void fetchSearchCached(q.trim(), p + 1);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Search failed");
@@ -73,50 +92,35 @@ export default function Home() {
     []
   );
 
-  /** Prefetches next page data in the background for cached paging */
-  const prefetchPage = useCallback(async (q: string, p: number) => {
-    try {
-      const res = await fetch(
-        `/api/search?q=${encodeURIComponent(q)}&page=${p}`
-      );
-      const json = await res.json();
-      if (res.ok && json.items) {
-        setPrefetched({ query: q, page: p, data: json });
-      }
-    } catch {
-      // Silently ignore prefetch errors; user can still navigate and trigger a fresh fetch
-    }
-  }, []);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
-    setPrefetched(null);
-    search(query, 1);
+    void clearSearchCache().then(() => search(query, 1));
   };
 
-  /** Navigates to a page: uses prefetched data if available, otherwise fetches */
+  /** Navigates to a page; uses Cache API (populated by prefetch) for instant navigation */
   const goToPage = useCallback(
     (nextPage: number) => {
       const q = query.trim();
-      if (prefetched && prefetched.query === q && prefetched.page === nextPage) {
-        setData(prefetched.data);
-        setPage(nextPage);
-        setExpandedId(null);
-        setPrefetched(null);
-        const totalPages = Math.max(
-          1,
-          Math.ceil(prefetched.data.totalItems / 10)
-        );
-        if (nextPage < totalPages) {
-          prefetchPage(q, nextPage + 1);
-        }
-      } else {
-        setPage(nextPage);
-        search(query, nextPage);
-      }
+      setPage(nextPage);
+      setLoading(true);
+      setError(null);
+      fetchSearchCached(q, nextPage)
+        .then((json) => {
+          setData(json);
+          setExpandedId(null);
+          const totalPages = Math.max(1, Math.ceil(json.totalItems / 10));
+          if (nextPage < totalPages) {
+            void fetchSearchCached(q, nextPage + 1);
+          }
+        })
+        .catch((e) => {
+          setError(e instanceof Error ? e.message : "Search failed");
+          setData(null);
+        })
+        .finally(() => setLoading(false));
     },
-    [query, prefetched, search, prefetchPage]
+    [query]
   );
 
   // Google Books API returns 10 results per page
